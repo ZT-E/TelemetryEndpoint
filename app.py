@@ -15,7 +15,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 destWebhook = os.environ.get("WEBHOOK_URL")
 mainSite = os.environ.get("PUBLIC_SITE")
 serverHeartBeats = Dict()
-nodeIDs = ['CHI-1','TOR-1','DAL-1','DAL-2','DAL-3','LHR-1']
 db = SQLAlchemy(app)
 
 class InfoLog(db.Model):
