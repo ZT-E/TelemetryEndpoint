@@ -29,7 +29,7 @@ db.session.commit()
 
 @app.route("/")
 def redirMain():
-    return ("<script>location.replace('"mainSite"')</script>")
+    return ("<script>location.replace('"+mainSite+"')</script>")
 
 @app.route("/v1/inbound/message", methods=['POST'])
 def msgLog():
@@ -111,7 +111,6 @@ def webhookSend(content, endpoint):
         r = requests.post(destWebhook, headers={'User-Agent': 'Mozilla/5.0'}, data={'content':content})
         if r.status_code == 200:
             print("webhook sent")
-            return 200
         else:
             return 500
     elif endpoint == "Status":
