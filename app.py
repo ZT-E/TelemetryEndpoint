@@ -7,6 +7,8 @@ import os
 from datetime import datetime
 from addict import Dict
 import json
+import sys
+import time
 app = Flask(__name__)
 
 app.config['SECRET_KEY'] = os.environ.get("FLASK_SECRET")
@@ -22,6 +24,7 @@ class InfoLog(db.Model):
     title = db.Column(db.String(50))
     content = db.Column(db.Text)
     date = db.Column(db.DateTime)
+    eventtype = db.Column(db.String(10))
 print(apiKey)
 
 db.create_all()
@@ -29,18 +32,23 @@ db.session.commit()
 
 @app.route("/")
 def redirMain():
-    return ("<script>location.replace('"mainSite"')</script>")
+    return ("<script>location.replace('"+mainSite+"')</script>")
+   # return 'hi'
 
 @app.route("/v1/inbound/message", methods=['POST'])
 def msgLog():
     req_data = request.get_json()
     api_Key = req_data['API_KEY']
-    time = datetime.now()
+    time = datetime.utcnow()
     title = req_data['TITLE']
     content = req_data['CONTENT']
+    eventtype = req_data['EVENT_TYPE']
+    eventtype = eventtype.lower()
     print(content)
     if apiKey == api_Key:
-        data = InfoLog(title=title, date=time, content=content)
+        if eventtype.lower() not in ['warning', 'message', 'error']:
+            return "",406
+        data = InfoLog(title=title, date=time, content=content, eventtype=eventtype)
         try:
             db.session.add(data)
             db.session.commit()
@@ -57,12 +65,14 @@ def getMsgLog():
     targdict = Dict()
     for x in logs:
         targdict['__'].setdefault(str(x.date),{})
-        targdict['__'][str(x.date)].setdefault(x.title,x.content)
+        targdict['__'][str(x.date)].setdefault('TITLE',x.title)
+        targdict['__'][str(x.date)].setdefault('CONTENT',x.content)
+        targdict['__'][str(x.date)].setdefault('eventtype',x.eventtype)
 
     resp = app.response_class(response=json.dumps(targdict),status=200,mimetype="application/json")
     return resp
 
-@app.route("/v1/rc", methods=['POST'])
+@app.route("/v1/rc/daemon", methods=['POST'])
 def checkRegionalCoord():
     req_data = request.get_json()
     api_Key = req_data['API_KEY']
@@ -70,10 +80,14 @@ def checkRegionalCoord():
     service = req_data['DAEMON']
     result = req_data['STATUS']
     location = req_data['LOCATION']
+    if service.lower() in ["nginx","sslh","sshd","geodns"]:
+        eventtype = "error"
+    else:
+        eventtype = "warning"
     dtime = datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
     content = " **Problem** detected with" + ' '+"**"+ service +"**" + ' '+ "currently reporting as" + ' ' + result[:-1] + ' ' + "at" + ' ' + time + ' ' + "at" + ' ' + location
     if apiKey == api_Key:
-        data = InfoLog(title=location+" RC Systemd Logger", date=dtime, content="Daemon: "+service+" Status: "+result)
+        data = InfoLog(title=location+" RC Systemd Logger", date=dtime, content="Daemon: "+service+" Status: "+result, eventtype=eventtype)
         try:
             db.session.add(data)
             db.session.commit()
@@ -95,7 +109,7 @@ def heartBeatReceive():
     serverHeartBeats['HBLog'].setdefault(node_id,str(time))
     
 
-@app.route("/v1/node", methods=['POST'])
+@app.route("/v1/node/daemon", methods=['POST'])
 def checkNode():
     req_data = request.get_json()
     time = req_data['TIMESTAMP']
@@ -111,7 +125,6 @@ def webhookSend(content, endpoint):
         r = requests.post(destWebhook, headers={'User-Agent': 'Mozilla/5.0'}, data={'content':content})
         if r.status_code == 200:
             print("webhook sent")
-            return 200
         else:
             return 500
     elif endpoint == "Status":
